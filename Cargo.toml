@@ -1,0 +1,11 @@
+[package]
+name = "fluufff-bot"
+version = "0.1.0"
+authors = ["Kasil <kasil@loutre.info>"]
+edition = "2018"
+
+[dependencies]
+telegram-bot-fork = "0.7.7"
+openssl = "^0.10" 
+futures = "^0.1"
+tokio = "^0.1"
