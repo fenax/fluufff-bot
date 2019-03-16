@@ -2,79 +2,95 @@ extern crate futures;
 extern crate telegram_bot_fork;
 extern crate tokio;
 
-use std::env;
 use std::collections::VecDeque;
+use std::env;
 
-use futures::{Stream, future::lazy};
+use futures::{future::lazy, Stream};
 
 use telegram_bot_fork::*;
 
-
-struct AdminChat{
+#[derive(Debug)]
+struct AdminChat {
     admin: Box<User>,
     title: String,
     current_chat: Option<Box<User>>,
     waiting_line: VecDeque<User>,
 }
 
-impl AdminChat{
-    pub fn new(title:&str,admin:&User,api:&Api)->AdminChat{
-        api.spawn(admin.text(format!("you are now {}\nType /quit to stop being it.",title)));
+impl AdminChat {
+    pub fn new(title: &str, admin: &User, api: &Api) -> AdminChat {
+        api.spawn(admin.text(format!(
+            "you are now {}\nType /quit to stop being it.",
+            title
+        )));
         AdminChat {
-            admin:Box::new(admin.clone()),
-            title:title.to_string(),
-            current_chat:None,
-            waiting_line:VecDeque::new(),
+            admin: Box::new(admin.clone()),
+            title: title.to_string(),
+            current_chat: None,
+            waiting_line: VecDeque::new(),
         }
     }
 
-    fn set_current_chat(&mut self, user:&User,api:&Api){
+    fn set_current_chat(&mut self, user: &User, api: &Api) {
         self.current_chat = Some(Box::new(user.clone()));
-        api.spawn(user.text(format!("you are now talking to {}.\nThe conversation can be closed with /close",self.title)));
-        api.spawn(self.admin.text(format!("you are now talking to {}.\nThe conversation can be closed with /close", user.first_name)));
+        api.spawn(user.text(format!(
+            "you are now talking to {}.\nThe conversation can be closed with /close",
+            self.title
+        )));
+        api.spawn(self.admin.text(format!(
+            "you are now talking to {}.\nThe conversation can be closed with /close",
+            user.first_name
+        )));
     }
 
-    fn ask_chat(&mut self, user :&User,api:&Api){
-        match &self.current_chat{
+    fn ask_chat(&mut self, user: &User, api: &Api) {
+        match &self.current_chat {
             None => {
-                self.set_current_chat(&user,&api);
-            },
+                self.set_current_chat(&user, &api);
+            }
             Some(a) => {
                 if **a == *user {
-                    api.spawn(user.text(format!("what are you doing, you are already talking to {}",self.title)));
-                }else if self.waiting_line.contains(user){
+                    api.spawn(user.text(format!(
+                        "what are you doing, you are already talking to {}",
+                        self.title
+                    )));
+                } else if self.waiting_line.contains(user) {
                     api.spawn(user.text("you are already in the waiting list"));
-                }else{
+                } else {
                     self.waiting_line.push_back(user.clone());
                     api.spawn(user.text("you are on waiting list"));
-                    api.spawn(self.admin.text(format!("{} is now on waiting list",user.first_name)));
+                    api.spawn(
+                        self.admin
+                            .text(format!("{} is now on waiting list", user.first_name)),
+                    );
                 }
             }
         }
     }
-    fn end_current_chat(&mut self,api:&Api){
+    fn end_current_chat(&mut self, api: &Api) {
         if let Some(c) = &self.current_chat {
-            api.spawn(c.text(format!("your conversation with {} was clotured",self.title)));
-            api.spawn(self.admin.text(format!("your conversation with {} was clotured",c.first_name)));
+            api.spawn(c.text(format!(
+                "your conversation with {} was clotured",
+                self.title
+            )));
+            api.spawn(self.admin.text(format!(
+                "your conversation with {} was clotured",
+                c.first_name
+            )));
             self.current_chat = None;
-            match self.waiting_line.pop_front(){
-                None => {
-                    
-                },
-                Some(a) =>{
-                    self.set_current_chat(&a,&api);
-                },
+            match self.waiting_line.pop_front() {
+                None => {}
+                Some(a) => {
+                    self.set_current_chat(&a, &api);
+                }
             }
         }
     }
 }
 
-
 fn main() {
     tokio::runtime::current_thread::Runtime::new().unwrap().block_on(lazy(|| {
 
-        
-        
         let token = env::var("TELEGRAM_BOT_TOKEN").unwrap();
         let api = Api::new(token).unwrap();
 
@@ -91,14 +107,21 @@ fn main() {
                 Ok(update) => {
                     // If the received update contains a new message...
                     if let UpdateKind::Message(message) = update.kind {
-                        if let MessageKind::Text { ref data, .. } = message.kind {
+                        match message.kind{
+                            MessageKind::Text { ref data, .. } => {
                             match data.as_ref(){
                                 "/start" => {
-                                    api.spawn(message.chat.text("Hello, welcome to Fluufff telegram bot.\n Please type /conops to talk to conops."));
+                                    api.spawn(message.chat.text("Hello, welcome to Fluufff telegram bot.\n\nPlease type /conops to talk to conops."));
                                 }
                                 "/conops" => {
                                     match conops.as_mut() {
-                                        Some(a) => { a.ask_chat(&message.from,&api); },
+                                        Some(a) => {
+                                            if *a.admin == message.from {
+                                                api.spawn(message.chat.text("trying to talk to yourself ?"));
+                                            }else{
+                                                a.ask_chat(&message.from,&api);
+                                            }
+                                        },
                                         None => {
                                             api.spawn(message.chat.text("conops is not available"));
                                         },
@@ -135,30 +158,60 @@ fn main() {
                                             if let Some(b) = &a.current_chat{
                                                 api.spawn(b.text(data));
                                             }else{
+                                            }
+                                        }else{
+
+                                        match &a.current_chat{
+                                            Some(b) =>{
+                                                if message.from == **b{
+                                                    api.spawn(message.forward(a.admin.clone()));
+                                                }else{
+                                                api.spawn(message.chat.text("You are not yet talking to anybody yet, you can type /conops to talk to conops."));
+                                                }
+                                            },
+                                            None => {
                                                 api.spawn(message.chat.text("You are not yet talking to anybody yet, you can type /conops to talk to conops."));
                                             }
                                         }
-                                        match &a.current_chat{
-                                        Some(b) =>{
-                                            if message.from == **b{
-                                               api.spawn(message.forward(a.admin.clone()));
-                                            }
-                                        },
-                                        None => {}}
+                                        }
                                     }
-                            
-                                }}
+                                }
+                            }
+                            },
+                            MessageKind::Photo {ref data, ref caption, .. } => {
+                                if let Some(a) = &conops {
+                                    if let Some(b) = &a.current_chat{
+                                        if message.from == *a.admin{
+                                            if let Some(p) = data.first(){
+                                                let mut snd = SendPhoto::with_url(&b,&p.file_id);
+                                                if let Some(c) = caption{
+                                                    snd.caption(c);
+                                                }
+                                                api.spawn(snd);
+                                            }
+                                        }else if message.from == **b{
+                                            api.spawn(message.forward(a.admin.clone()));
+                                        }
+                                    }
+                                }
 
-                                
-                            // Print received text message to stdout.
-                            println!("<{}>: {}", &message.from.first_name, data);
+                            },
 
-                            // Answer message with "Hi".
-            //                api.spawn(message.text_reply(format!(
-            //                    "Hi, {}! You just wrote '{}'",
-            //                    &message.from.first_name, data
-            //                )));
+                            _ =>{
+                            if let Some(a) = &conops {
+                                match &a.current_chat{
+                                    Some(b) =>{
+                                        if message.from == **b{
+                                            api.spawn(message.forward(a.admin.clone()));
+                                        }
+                                    },
+                                    None => {}
+                                }
+
+                            }
+                            }
                         }
+
                     }
                 }
                 Err(_) => {}
@@ -167,5 +220,13 @@ fn main() {
             Ok(())
         })
     })).unwrap();
-
 }
+
+// Print received text message to stdout.
+//    println!("<{}>: {}\n{:?}", &message.from.first_name, data,conops);
+
+// Answer message with "Hi".
+//                api.spawn(message.text_reply(format!(
+//                    "Hi, {}! You just wrote '{}'",
+//                    &message.from.first_name, data
+//                )));

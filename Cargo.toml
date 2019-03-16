@@ -5,7 +5,8 @@ authors = ["Kasil <kasil@loutre.info>"]
 edition = "2018"
 
 [dependencies]
-telegram-bot-fork = "0.7.7"
+telegram-bot-fork = {path = "telegram-bot/lib"}
+telegram-bot-fork-raw = {path = "telegram-bot/raw"}
 openssl = "^0.10" 
 futures = "^0.1"
 tokio = "^0.1"
